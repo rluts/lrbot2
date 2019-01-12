@@ -1,0 +1,10 @@
+venv/
+*.pyc
+*.log
+user-config.py
+pywikibot.lwp
+apicache*/
+throttle.ctrl
+*.db
+tmp/
+.idea/

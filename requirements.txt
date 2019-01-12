@@ -1,0 +1,11 @@
+certifi==2018.11.29
+chardet==3.0.4
+idna==2.8
+oauthlib==2.1.0
+Pillow==5.4.1
+python-resize-image==1.1.18
+pywikibot==3.0.dev0
+requests==2.21.0
+requests-oauthlib==1.1.0
+SQLAlchemy==1.2.16
+urllib3==1.24.1

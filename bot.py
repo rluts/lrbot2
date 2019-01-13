@@ -210,9 +210,9 @@ class ResizeBot:
 
 if __name__ == '__main__':
     while True:
-        # try:
+        try:
             bot = ResizeBot()
             bot.run_resizing()
-        # except Exception as e:
-        #     print(e)
-        #     logging.error(e)
+        except Exception as e:
+            print(e)
+            logging.error(e)

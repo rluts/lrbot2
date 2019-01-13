@@ -53,7 +53,7 @@ class ResizeBot:
                 yield page
 
     def run_resizing(self):
-        pages = list(self.get_transclude())
+        pages = set(self.get_transclude())
         if not pages:
             print("Cleanup")
             self.purge_tmp()
@@ -63,7 +63,6 @@ class ResizeBot:
         for page in pages:
             try:
                 width, log = self.get_params(page)
-                page.text = self.remove_template(page.text)
                 self.check_file(page, width)
                 print(page.title())
                 user, revision = self.get_requester(page)
@@ -91,7 +90,7 @@ class ResizeBot:
                 except Exception as e:
                     pass
 
-                self.upload(page, description)
+                # self.upload(page, description)
                 comment = self.messages['success']
 
                 if log:
@@ -107,6 +106,10 @@ class ResizeBot:
                 comment = self.errors['imagesizeerror']
             except ImageFormatError:
                 comment = self.errors['imageformaterror'].format(', '.join(self.extensions))
+            except Exception as ex:
+                logging.error(ex)
+                continue
+            page.text = self.remove_template(page.text)
             page.save(summary=comment, minor=True)
 
     def remove_template(self, wiki_text):
@@ -127,18 +130,18 @@ class ResizeBot:
             ext = page.title().split('.')[-1].lower()
             if ext not in self.extensions:
                 raise ValueError
-        except Exception as e:
-            raise ImageFormatError(e)
+        except Exception as ex:
+            raise ImageFormatError(ex)
         try:
             info = page.latest_file_info
         except Exception as ex:
             raise ImageFormatError(ex)
         current_width = info.width
         if current_width <= width:
+            print(current_width, width)
             raise ImageSizeError(actual_size=width, required_size=current_width)
 
     def get_image(self, page):
-        # TODO: page.download
         url = page.get_file_url()
         r = requests.get(url, stream=True)
         if r.status_code == 200:

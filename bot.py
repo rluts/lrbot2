@@ -64,13 +64,13 @@ class ResizeBot:
             # page.text = page.get()
             try:
                 # print(page.text)
+                page.text = self.remove_template(page.text)
                 width, log = self.get_params(page)
                 self.check_file(page, width)
                 print(page.title())
                 user, revision = self.get_requester(page)
                 description = self.description.format(user=user)
                 print(description)
-                page.text = self.remove_template(page.text)
                 log = ("\n== %s ==\n{|class=\"wikitable\"\n" % self.log_section +
                        page.getFileVersionHistoryTable()) if log else None
                 # print(log)  # TODO:

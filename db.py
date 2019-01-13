@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
+
 from sqlalchemy import Column, Integer, String, DateTime, SmallInteger, Boolean, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 
-engine = create_engine('sqlite:///sqlite3.db', echo=True)
+engine = create_engine('sqlite:///sqlite3.db', encoding='utf-8')
 
 Base = declarative_base()
 

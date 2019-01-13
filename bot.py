@@ -90,7 +90,7 @@ class ResizeBot:
                 except Exception as e:
                     pass
 
-                # self.upload(page, description)
+                self.upload(page, description)
                 comment = self.messages['success']
 
                 if log:

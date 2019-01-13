@@ -9,6 +9,7 @@ import re
 import logging
 from resizeimage.imageexceptions import ImageSizeError
 from time import sleep
+import os
 
 from sqlalchemy.orm import sessionmaker
 
@@ -18,9 +19,10 @@ logging.basicConfig(filename="error.log", level=logging.ERROR)
 
 
 class ResizeBot:
-    template_name = 'Користувач:LRBot/resize_temp'
-    template_regex = '\\{\\{\\s?(?:User|Користувач)?:LRBot/resize_temp\\s?(?:\\|.+|\\s.+}})'
+    template_name = 'Користувач:LRBot/resize'
+    template_regex = '\\{\\{\\s?(?:User|Користувач)?:LRBot/resize\\s?(?:\\|.+|\\s.+}})'
     description = "Зменшення розміру зображення за запитом користувача [[User:{user}|{user}]]"
+    log_section = 'Журнал завантажень'
     extensions = ('png', 'gif', 'jpg', 'jpeg', 'tiff', 'tif')
     path = 'tmp/'
 
@@ -51,8 +53,10 @@ class ResizeBot:
                 yield page
 
     def run_resizing(self):
-        pages = self.get_transclude()
+        pages = list(self.get_transclude())
         if not pages:
+            print("Cleanup")
+            self.purge_tmp()
             print("{} Sleeping 60 seconds".format(datetime.now()))
             sleep(60)
             self.run_resizing()
@@ -66,7 +70,9 @@ class ResizeBot:
                 user, revision = self.get_requester(page)
                 description = self.description.format(user=user)
                 print(description)
-                log = page.getFileVersionHistoryTable() if log else None
+                page.text = self.remove_template(page.text)
+                log = ("== {} ==\n{|class=\"wikitable\"\n".format(self.log_section) +
+                       page.getFileVersionHistoryTable()) if log else None
                 # print(log)  # TODO:
 
                 db_instance = Upload(
@@ -104,7 +110,6 @@ class ResizeBot:
                 comment = self.errors['imagesizeerror']
             except ImageFormatError:
                 comment = self.errors['imageformaterror'].format(', '.join(self.extensions))
-            page.text = self.remove_template(page.text)
             page.save(summary=comment, minor=True)
 
     def remove_template(self, wiki_text):
@@ -134,9 +139,6 @@ class ResizeBot:
         current_width = info.width
         if current_width <= width:
             raise ImageSizeError(actual_size=width, required_size=current_width)
-
-    def edit_page(self, page):
-        pass
 
     def get_image(self, page):
         # TODO: page.download
@@ -194,9 +196,20 @@ class ResizeBot:
             user = revision.user
             last_revision = revision
 
+    def purge_tmp(self):
+        folder = self.path
+        for the_file in os.listdir(folder):
+            file_path = os.path.join(folder, the_file)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                # elif os.path.isdir(file_path): shutil.rmtree(file_path)
+            except Exception as e:
+                print(e)
+
 
 if __name__ == '__main__':
-    # while True:
+    while True:
         # try:
             bot = ResizeBot()
             bot.run_resizing()

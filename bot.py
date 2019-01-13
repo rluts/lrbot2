@@ -4,8 +4,14 @@ import requests
 from PIL import Image
 from resizeimage import resizeimage
 from exceptions import *
+from datetime import datetime
 import re
 import logging
+from resizeimage.imageexceptions import ImageSizeError
+
+from sqlalchemy.orm import sessionmaker
+
+from db import engine, Upload
 
 logging.basicConfig(filename="error.log", level=logging.ERROR)
 
@@ -20,6 +26,8 @@ class ResizeBot:
     def __init__(self):
         self.site = pywikibot.Site()
         self.template = pywikibot.Page(self.site, self.template_name)
+        Session = sessionmaker(bind=engine)
+        self.session = Session()
 
     def get_transclude(self):
         pages = pagegenerators.ReferringPageGenerator(self.template, onlyTemplateInclusion=True)
@@ -36,10 +44,26 @@ class ResizeBot:
                 user = self.get_requester(page)
                 description = self.description.format(user=user)
                 print(description)
-                self.get_image(page)
-                self.resize_img(page, int(width))
                 log = page.getFileVersionHistoryTable() if 'log' in params else None
                 print(log)  # TODO:
+
+                db_instance = Upload(
+                    datetime=datetime.now(),
+                    username=user,
+                    width=width,
+                    filename=page.title(),
+                    status=0,
+                    log=bool(log)
+                )
+                self.session.add(db_instance)
+                self.session.commit()
+
+                self.get_image(page)
+                try:
+                    self.resize_img(page, int(width))
+                except (OSError, ImageSizeError):  # TODO: resizeimage.imageexceptions.ImageSizeError
+                    continue
+
             except (TemplateParamsError, DownloadError, ValueError):
                 continue
 

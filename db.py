@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, DateTime, SmallInteger, Boolean, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 
 engine = create_engine('sqlite:///sqlite3.db', echo=True)
@@ -14,6 +14,8 @@ class Upload(Base):
     username = Column(String)
     width = Column(Integer)
     filename = Column(String)
+    status = Column(SmallInteger)
+    log = Column(Boolean)
 
     def __repr__(self):
         return "{} to {}px ({})".format(self.filename, self.width, self.username)

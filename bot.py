@@ -18,11 +18,25 @@ logging.basicConfig(filename="error.log", level=logging.ERROR)
 
 
 class ResizeBot:
-    template_name = 'Користувач:LRBot/resize'
-    template_regex = '\\{\\{\\s?(?:User|Користувач)?:LRBot/resize\\s?(?:\\|.+|\\s.+}})'
+    template_name = 'Користувач:LRBot/resize_temp'
+    template_regex = '\\{\\{\\s?(?:User|Користувач)?:LRBot/resize_temp\\s?(?:\\|.+|\\s.+}})'
     description = "Зменшення розміру зображення за запитом користувача [[User:{user}|{user}]]"
+    extensions = ('png', 'gif', 'jpg', 'jpeg', 'tiff', 'tif')
     path = 'tmp/'
-    locale_file = 'Файл:'
+
+    messages = {
+        'success': 'Зображення зменшено',
+        'log': '. Доданий журнал завантажень'
+    }
+
+    errors = {
+        'templateparamserror': 'Помилка при завантаженні параметрів шаблону. '
+                               '[[User:LRBot/resize|Дивіться документацію]].',
+        'downloaderror': 'Неможливо завантажити зображення з сервера',
+        'uploaderror': 'Неможливо завантажити зображення на сервер',
+        'imagesizeerror': 'Вкажіть ширину файлу, меншу за поточну',
+        'imageformaterror': 'Формат не підтримується. Доступні формати: {}'
+    }
 
     def __init__(self):
         self.site = pywikibot.Site()
@@ -39,18 +53,21 @@ class ResizeBot:
     def run_resizing(self):
         pages = self.get_transclude()
         if not pages:
+            print("{} Sleeping 60 seconds".format(datetime.now()))
             sleep(60)
             self.run_resizing()
         for page in pages:
+            # page.text = page.get()
             try:
-                params = self.get_params(page)
-                width = params[0]
+                # print(page.text)
+                width, log = self.get_params(page)
+                self.check_file(page, width)
                 print(page.title())
                 user, revision = self.get_requester(page)
                 description = self.description.format(user=user)
                 print(description)
-                log = page.getFileVersionHistoryTable() if 'log' in params else None
-                print(log)  # TODO:
+                log = page.getFileVersionHistoryTable() if log else None
+                # print(log)  # TODO:
 
                 db_instance = Upload(
                     datetime=datetime.now(),
@@ -64,25 +81,62 @@ class ResizeBot:
                 self.session.commit()
 
                 self.get_image(page)
+                self.resize_img(page, width)
+                self.site.login()
                 try:
-                    self.resize_img(page, int(width))
-                    self.site.login()
-                    try:
-                        revision._thank(revision['revid'], self.site)
-                    except Exception as e:
-                        pass
+                    revision._thank(revision['revid'], self.site)
+                except Exception as e:
+                    pass
 
-                    self.upload(page, description)  # TODO: add try except
+                self.upload(page, description)
+                comment = self.messages['success']
 
-                except (OSError, ImageSizeError):  # TODO: resizeimage.imageexceptions.ImageSizeError
-                    continue
+                if log:
+                    comment += self.messages['log']
+                    page.text += log
+            except TemplateParamsError:
+                comment = self.errors['templateparamserror']
+            except (DownloadError, OSError):
+                comment = self.errors['downloaderror']
+            except UploadError:
+                comment = self.errors['uploaderror']
+            except ImageSizeError:
+                comment = self.errors['imagesizeerror']
+            except ImageFormatError:
+                comment = self.errors['imageformaterror'].format(', '.join(self.extensions))
+            page.text = self.remove_template(page.text)
+            page.save(summary=comment, minor=True)
 
-            except (TemplateParamsError, DownloadError, ValueError):
-                continue
+    def remove_template(self, wiki_text):
+        for template in self._find_templates(wiki_text):
+            print("Removing %s" % template)
+            wiki_text = wiki_text.replace(template, '')
+        # print(wiki_text)
+        return wiki_text
 
     def upload(self, page, description):
-        return page.upload(self.get_thumb_filename(page), comment=description, report_success=True,
-                           ignore_warnings=True)
+        upload = page.upload(self.get_thumb_filename(page), comment=description, report_success=True,
+                             ignore_warnings=True)
+        if not upload:
+            raise UploadError
+
+    def check_file(self, page, width):
+        try:
+            ext = page.title().split('.')[-1].lower()
+            if ext not in self.extensions:
+                raise ValueError
+        except Exception as e:
+            raise ImageFormatError(e)
+        try:
+            info = page.latest_file_info
+        except Exception as e:
+            raise ImageFormatError(e)
+        current_width = info.width
+        if current_width <= width:
+            raise ImageSizeError(actual_size=width, required_size=current_width)
+
+    def edit_page(self, page):
+        pass
 
     def get_image(self, page):
         # TODO: page.download
@@ -99,7 +153,7 @@ class ResizeBot:
 
     def get_file_name(self, page, with_path=True):
         path = self.path if with_path else ''
-        return path + page.title().replace(self.locale_file, '').replace(' ', '_')
+        return path + page.title(with_ns=False, as_filename=True)
 
     def get_thumb_filename(self, page):
         tmp = self.get_file_name(page).split('.')
@@ -114,11 +168,14 @@ class ResizeBot:
             img.save(new_image_name, img.format)
 
     def get_params(self, page):
-        templates = page.templatesWithParams()
-        params = dict(templates).get(self.template)
-        if not params:
-            raise TemplateParamsError
-        return params
+        try:
+            templates = page.templatesWithParams()
+            params = dict(templates).get(self.template)
+            width = int(params[0])
+            log = True if 'log' in params else None
+            return width, log
+        except Exception as e:
+            raise TemplateParamsError(e)
 
     def _find_templates(self, wiki_text):
         return re.findall(self.template_regex, wiki_text)

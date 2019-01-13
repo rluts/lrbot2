@@ -4,3 +4,11 @@ class TemplateParamsError(Exception):
 
 class DownloadError(Exception):
     pass
+
+
+class UploadError(Exception):
+    pass
+
+
+class ImageFormatError(Exception):
+    pass

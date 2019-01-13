@@ -71,7 +71,7 @@ class ResizeBot:
                 description = self.description.format(user=user)
                 print(description)
                 page.text = self.remove_template(page.text)
-                log = ("== {} ==\n{|class=\"wikitable\"\n".format(self.log_section) +
+                log = ("\n== %s ==\n{|class=\"wikitable\"\n" % self.log_section +
                        page.getFileVersionHistoryTable()) if log else None
                 # print(log)  # TODO:
 

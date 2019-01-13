@@ -8,6 +8,7 @@ from datetime import datetime
 import re
 import logging
 from resizeimage.imageexceptions import ImageSizeError
+from time import sleep
 
 from sqlalchemy.orm import sessionmaker
 
@@ -18,7 +19,7 @@ logging.basicConfig(filename="error.log", level=logging.ERROR)
 
 class ResizeBot:
     template_name = 'Користувач:LRBot/resize'
-    template_regex = '\\{\\{\\s?(?:User|Користувач)?:LRBot/resize\\s?(?:\\||\\s}})'
+    template_regex = '\\{\\{\\s?(?:User|Користувач)?:LRBot/resize\\s?(?:\\|.+|\\s.+}})'
     description = "Зменшення розміру зображення за запитом користувача [[User:{user}|{user}]]"
     path = 'tmp/'
     locale_file = 'Файл:'
@@ -36,12 +37,16 @@ class ResizeBot:
                 yield page
 
     def run_resizing(self):
-        for page in self.get_transclude():
+        pages = self.get_transclude()
+        if not pages:
+            sleep(60)
+            self.run_resizing()
+        for page in pages:
             try:
                 params = self.get_params(page)
                 width = params[0]
                 print(page.title())
-                user = self.get_requester(page)
+                user, revision = self.get_requester(page)
                 description = self.description.format(user=user)
                 print(description)
                 log = page.getFileVersionHistoryTable() if 'log' in params else None
@@ -61,11 +66,23 @@ class ResizeBot:
                 self.get_image(page)
                 try:
                     self.resize_img(page, int(width))
+                    self.site.login()
+                    try:
+                        revision._thank(revision['revid'], self.site)
+                    except Exception as e:
+                        pass
+
+                    self.upload(page, description)  # TODO: add try except
+
                 except (OSError, ImageSizeError):  # TODO: resizeimage.imageexceptions.ImageSizeError
                     continue
 
             except (TemplateParamsError, DownloadError, ValueError):
                 continue
+
+    def upload(self, page, description):
+        return page.upload(self.get_thumb_filename(page), comment=description, report_success=True,
+                           ignore_warnings=True)
 
     def get_image(self, page):
         # TODO: page.download
@@ -84,13 +101,16 @@ class ResizeBot:
         path = self.path if with_path else ''
         return path + page.title().replace(self.locale_file, '').replace(' ', '_')
 
+    def get_thumb_filename(self, page):
+        tmp = self.get_file_name(page).split('.')
+        tmp[-2] += '_thumb'
+        return '.'.join(tmp)
+
     def resize_img(self, page, width):
         with open(self.get_file_name(page),  'rb') as f:
             img = Image.open(f)
             img = resizeimage.resize_width(img, width)
-            tmp = self.get_file_name(page).split('.')
-            tmp[-2] += '_thumb'
-            new_image_name = '.'.join(tmp)
+            new_image_name = self.get_thumb_filename(page)
             img.save(new_image_name, img.format)
 
     def get_params(self, page):
@@ -100,17 +120,22 @@ class ResizeBot:
             raise TemplateParamsError
         return params
 
+    def _find_templates(self, wiki_text):
+        return re.findall(self.template_regex, wiki_text)
+
     def _is_template_on_page(self, wiki_text):
-        # print(re.findall(self.template_regex, wiki_text))
-        return bool(re.findall(self.template_regex, wiki_text))
+        templates = self._find_templates(wiki_text)
+        return bool(templates)
 
     def get_requester(self, page):
         user = 'unknown'
+        last_revision = None
         for revision in page.revisions():
             wiki_text = page.getOldVersion(revision['revid'])
             if not self._is_template_on_page(wiki_text):
-                return user
+                return user, last_revision
             user = revision.user
+            last_revision = revision
 
 
 if __name__ == '__main__':

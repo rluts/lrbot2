@@ -61,11 +61,9 @@ class ResizeBot:
             sleep(60)
             self.run_resizing()
         for page in pages:
-            # page.text = page.get()
             try:
-                # print(page.text)
-                page.text = self.remove_template(page.text)
                 width, log = self.get_params(page)
+                page.text = self.remove_template(page.text)
                 self.check_file(page, width)
                 print(page.title())
                 user, revision = self.get_requester(page)
@@ -73,7 +71,6 @@ class ResizeBot:
                 print(description)
                 log = ("\n== %s ==\n{|class=\"wikitable\"\n" % self.log_section +
                        page.getFileVersionHistoryTable()) if log else None
-                # print(log)  # TODO:
 
                 db_instance = Upload(
                     datetime=datetime.now(),
@@ -134,8 +131,8 @@ class ResizeBot:
             raise ImageFormatError(e)
         try:
             info = page.latest_file_info
-        except Exception as e:
-            raise ImageFormatError(e)
+        except Exception as ex:
+            raise ImageFormatError(ex)
         current_width = info.width
         if current_width <= width:
             raise ImageSizeError(actual_size=width, required_size=current_width)
@@ -176,8 +173,8 @@ class ResizeBot:
             width = int(params[0])
             log = True if 'log' in params else None
             return width, log
-        except Exception as e:
-            raise TemplateParamsError(e)
+        except Exception as ex:
+            raise TemplateParamsError(ex)
 
     def _find_templates(self, wiki_text):
         return re.findall(self.template_regex, wiki_text)

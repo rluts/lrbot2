@@ -1,19 +1,19 @@
+import logging
+import os
+import re
+from datetime import datetime
+from exceptions import *
+from time import sleep
+
 import pywikibot
-from pywikibot import pagegenerators
 import requests
 from PIL import Image
+from pywikibot import pagegenerators
 from resizeimage import resizeimage
-from exceptions import *
-from datetime import datetime
-import re
-import logging
 from resizeimage.imageexceptions import ImageSizeError
-from time import sleep
-import os
-
 from sqlalchemy.orm import sessionmaker
 
-from db import engine, Upload
+from db import Upload, engine
 
 logging.basicConfig(filename="error.log", level=logging.ERROR)
 
@@ -68,7 +68,7 @@ class ResizeBot:
                 user, revision = self.get_requester(page)
                 description = self.description.format(user=user)
                 print(description)
-                log = ("\n== %s ==\n{|class=\"wikitable\"\n" % self.log_section +
+                log = ("\n== %s ==\n" % self.log_section +
                        page.getFileVersionHistoryTable()) if log else None
 
                 db_instance = Upload(
@@ -85,10 +85,11 @@ class ResizeBot:
                 self.get_image(page)
                 self.resize_img(page, width)
                 self.site.login()
+
                 try:
                     revision._thank(revision['revid'], self.site)
                 except Exception as e:
-                    pass
+                    logging.warning("Can not thank: {}".format(e))
 
                 self.upload(page, description)
                 comment = self.messages['success']
@@ -204,8 +205,8 @@ class ResizeBot:
                 if os.path.isfile(file_path):
                     os.unlink(file_path)
                 # elif os.path.isdir(file_path): shutil.rmtree(file_path)
-            except Exception as e:
-                print(e)
+            except Exception as ex:
+                print(ex)
 
 
 if __name__ == '__main__':

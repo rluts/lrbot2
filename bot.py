@@ -88,8 +88,8 @@ class ResizeBot:
 
                 try:
                     revision._thank(revision['revid'], self.site)
-                except Exception as e:
-                    logging.warning("Can not thank: {}".format(e))
+                except Exception as ex:
+                    logging.warning("Can not thank: {}".format(ex))
 
                 self.upload(page, description)
                 comment = self.messages['success']

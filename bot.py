@@ -20,7 +20,7 @@ logging.basicConfig(filename="error.log", level=logging.ERROR)
 
 class ResizeBot:
     template_name = 'Користувач:LRBot/resize'
-    template_regex = '\\{\\{\\s?(?:User|Користувач)?:LRBot/resize\\s?(?:\\|.+|\\s.+}})'
+    template_regex = r'\{\{\s?(?:User|Користувач)?:LRBot\/resize\s?(?:\|.+|\s.+}})'
     description = "Зменшення розміру зображення за запитом користувача [[User:{user}|{user}]]"
     log_section = 'Журнал завантажень'
     extensions = ('png', 'gif', 'jpg', 'jpeg', 'tiff', 'tif')
@@ -193,9 +193,10 @@ class ResizeBot:
         for revision in page.revisions():
             wiki_text = page.getOldVersion(revision['revid'])
             if not self._is_template_on_page(wiki_text):
-                return user, last_revision
+                break
             user = revision.user
             last_revision = revision
+        return user, last_revision
 
     def purge_tmp(self):
         folder = self.path

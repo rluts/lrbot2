@@ -3,7 +3,6 @@ chardet==3.0.4
 idna==2.8
 oauthlib==2.1.0
 Pillow==5.4.1
-pkg-resources==0.0.0
 python-resize-image==1.1.18
 pywikibot==3.0.20200306
 requests==2.21.0

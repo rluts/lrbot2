@@ -52,6 +52,21 @@ class ResizeBot:
             if isinstance(page, pywikibot.FilePage):
                 yield page
 
+    @staticmethod
+    def get_revision_table(page):
+        # TODO: Remove it after PR will be merged https://gerrit.wikimedia.org/r/#/c/pywikibot/core/+/582588/
+        """Return the version history in the form of a wiki table."""
+        lines = []
+        for info in page.get_file_history().values():
+            dimension = '{width}×{height} px ({size} bytes)'.format(**info.__dict__)
+            lines.append('| {timestamp} || {user} || {dimension} |'
+                         '| <nowiki>{comment}</nowiki>'
+                         ''.format(dimension=dimension, **info.__dict__))
+        return ('{| class="wikitable"\n'
+                '! {{int:filehist-datetime}} || {{int:filehist-user}} |'
+                '| {{int:filehist-dimensions}} || {{int:filehist-comment}}\n'
+                '|-\n%s\n|}\n' % '\n|-\n'.join(lines))
+
     def run_resizing(self):
         pages = set(self.get_transclude())
         if not pages:
@@ -69,7 +84,7 @@ class ResizeBot:
                 description = self.description.format(user=user)
                 print(description)
                 log = ("\n== %s ==\n" % self.log_section +
-                       page.getFileVersionHistoryTable()) if log else None
+                       self.get_revision_table(page)) if log else None
 
                 db_instance = Upload(
                     datetime=datetime.now(),

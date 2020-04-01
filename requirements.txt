@@ -2,7 +2,7 @@ certifi==2018.11.29
 chardet==3.0.4
 idna==2.8
 oauthlib==2.1.0
-Pillow==5.4.1
+Pillow==6.2.0
 python-resize-image==1.1.18
 pywikibot==3.0.20200306
 requests==2.21.0

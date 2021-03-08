@@ -56,8 +56,7 @@ class ResizeBot:
             template = pywikibot.Page(site.site, site.bot_config.template_name)
             pages = set(self.get_transclude(template))
             if not pages:
-                print("Cleanup")
-                self.purge_tmp()
+                print('No images found for {}.{}'.format(site.lang, site.family))
                 continue
             for page in pages:
                 try:
@@ -113,6 +112,8 @@ class ResizeBot:
                 page.text = self.remove_template(page.text, site)
                 page.save(summary=comment, minor=True)
 
+        print("Cleanup")
+        self.purge_tmp()
         print("{} Sleeping 60 seconds".format(datetime.now()))
         sleep(60)
         self.run_resizing()

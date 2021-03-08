@@ -1,5 +1,3 @@
-from enum import Enum
-
 from base_config import BaseConfig
 
 

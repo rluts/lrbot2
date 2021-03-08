@@ -106,9 +106,11 @@ class ResizeBot:
                 except ImageFormatError:
                     comment = site.bot_config.format(formats=', '.join(self.extensions))
                 except Exception as ex:
-                    comment = 'Unexpected error while file uploading: {}'.format(str(ex))
+                    # comment = 'Unexpected error while file uploading: {}'.format(str(ex))
                     print(str(ex))
                     logging.error(str(ex))
+                    continue
+
                 page.text = self.remove_template(page.text, site)
                 page.save(summary=comment, minor=True)
 

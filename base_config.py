@@ -1,0 +1,13 @@
+class BaseConfig:
+    user_namespace = 'User'
+    edit_summary_process = 'Reducing resolution by the [[User:{user}|{user}]] request'
+    template_name = 'User:LRBot/resize'
+    template_regex = r'\{\{\s?(?:User)?:LRBot\/resize\s?(?:\|.+|\s.+}})'
+    log_section = 'Upload log'
+    message_success = 'Image reduced'
+    upload_log_success = '. Added upload log'
+    params_error = 'Got error while loading the template parameters. See documentation'
+    download_error = 'Cannot download the image from the server'
+    upload_error = 'Cannot upload the image to the server'
+    width_error = 'New width of the image should be less than current width'
+    format_error = 'File format is not supported. Supported formats: {formats}'

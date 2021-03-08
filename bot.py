@@ -2,6 +2,8 @@ import logging
 import os
 import re
 from datetime import datetime
+
+from configs import WIKIS
 from exceptions import *
 from time import sleep
 
@@ -18,121 +20,108 @@ from db import Upload, engine
 logging.basicConfig(filename="error.log", level=logging.ERROR)
 
 
+class Site:
+    def __init__(self, *args):
+        wiki, self.bot_config = args
+        self.site = pywikibot.Site(*wiki.split('.'))
+
+    def __getattr__(self, item):
+        if item in ('bot_config', 'site'):
+            return getattr(self, item)
+        else:
+            return getattr(self.site, item)
+
+    def __get__(self, instance, owner):
+        return instance.site
+
+
 class ResizeBot:
-    template_name = 'Користувач:LRBot/resize'
-    template_regex = r'\{\{\s?(?:User|Користувач)?:LRBot\/resize\s?(?:\|.+|\s.+}})'
-    description = "Зменшення розміру зображення за запитом користувача [[User:{user}|{user}]]"
-    log_section = 'Журнал завантажень'
     extensions = ('png', 'gif', 'jpg', 'jpeg', 'tiff', 'tif')
     path = 'tmp/'
 
-    messages = {
-        'success': 'Зображення зменшено',
-        'log': '. Доданий журнал завантажень'
-    }
-
-    errors = {
-        'templateparamserror': 'Помилка при завантаженні параметрів шаблону. '
-                               '[[User:LRBot/resize|Дивіться документацію]].',
-        'downloaderror': 'Неможливо завантажити зображення з сервера',
-        'uploaderror': 'Неможливо завантажити зображення на сервер',
-        'imagesizeerror': 'Вкажіть ширину файлу, меншу за поточну',
-        'imageformaterror': 'Формат не підтримується. Доступні формати: {}'
-    }
-
     def __init__(self):
-        self.site = pywikibot.Site()
-        self.template = pywikibot.Page(self.site, self.template_name)
+        self.sites = [Site(*item) for item in WIKIS.items()]
         Session = sessionmaker(bind=engine)
         self.session = Session()
 
-    def get_transclude(self):
-        pages = pagegenerators.ReferringPageGenerator(self.template, onlyTemplateInclusion=True)
+    @staticmethod
+    def get_transclude(template):
+        pages = pagegenerators.ReferringPageGenerator(template, onlyTemplateInclusion=True)
         for page in pages:
             if isinstance(page, pywikibot.FilePage):
                 yield page
 
-    @staticmethod
-    def get_revision_table(page):
-        # TODO: Remove it after PR will be merged https://gerrit.wikimedia.org/r/#/c/pywikibot/core/+/582588/
-        """Return the version history in the form of a wiki table."""
-        lines = []
-        for info in page.get_file_history().values():
-            dimension = '{width}×{height} px ({size} bytes)'.format(**info.__dict__)
-            lines.append('| {timestamp} || {user} || {dimension} |'
-                         '| <nowiki>{comment}</nowiki>'
-                         ''.format(dimension=dimension, **info.__dict__))
-        return ('{| class="wikitable"\n'
-                '! {{int:filehist-datetime}} || {{int:filehist-user}} |'
-                '| {{int:filehist-dimensions}} || {{int:filehist-comment}}\n'
-                '|-\n%s\n|}\n' % '\n|-\n'.join(lines))
-
     def run_resizing(self):
-        pages = set(self.get_transclude())
-        if not pages:
-            print("Cleanup")
-            self.purge_tmp()
-            print("{} Sleeping 60 seconds".format(datetime.now()))
-            sleep(60)
-            self.run_resizing()
-        for page in pages:
-            try:
-                width, log = self.get_params(page)
-                self.check_file(page, width)
-                print(page.title())
-                user, revision = self.get_requester(page)
-                description = self.description.format(user=user)
-                print(description)
-                log = ("\n== %s ==\n" % self.log_section +
-                       self.get_revision_table(page)) if log else None
-
-                db_instance = Upload(
-                    datetime=datetime.now(),
-                    username=user,
-                    width=width,
-                    filename=page.title(),
-                    status=0,
-                    log=bool(log)
-                )
-                self.session.add(db_instance)
-                self.session.commit()
-
-                self.get_image(page)
-                self.resize_img(page, width)
-                self.site.login()
-
-                try:
-                    revision._thank(revision['revid'], self.site)
-                except Exception as ex:
-                    logging.warning("Can not thank: {}".format(ex))
-
-                self.upload(page, description)
-                comment = self.messages['success']
-
-                if log:
-                    comment += self.messages['log']
-                    page.text += log
-            except TemplateParamsError:
-                comment = self.errors['templateparamserror']
-            except (DownloadError, OSError):
-                comment = self.errors['downloaderror']
-            except UploadError:
-                comment = self.errors['uploaderror']
-            except ImageSizeError:
-                comment = self.errors['imagesizeerror']
-            except ImageFormatError:
-                comment = self.errors['imageformaterror'].format(', '.join(self.extensions))
-            except Exception as ex:
-                logging.error(ex)
+        for site in self.sites:
+            template = pywikibot.Page(site.site, site.bot_config.template_name)
+            pages = set(self.get_transclude(template))
+            if not pages:
+                print("Cleanup")
+                self.purge_tmp()
                 continue
-            page.text = self.remove_template(page.text)
-            page.save(summary=comment, minor=True)
+            for page in pages:
+                try:
+                    width, log = self.get_params(page, site)
+                    self.check_file(page, width)
+                    print(page.title())
+                    user, revision = self.get_requester(page, site)
+                    description = site.bot_config.edit_summary_process.format(user=user)
+                    print(description)
+                    log = ("\n== %s ==\n" % site.bot_config.log_section +
+                           page.getFileVersionHistoryTable()) if log else None
 
-    def remove_template(self, wiki_text):
-        for template in self._find_templates(wiki_text):
+                    db_instance = Upload(
+                        datetime=datetime.now(),
+                        username=user,
+                        width=width,
+                        filename=page.title(),
+                        status=0,
+                        log=bool(log)
+                    )
+                    self.session.add(db_instance)
+                    self.session.commit()
+
+                    self.get_image(page)
+                    self.resize_img(page, width)
+                    site.login()
+
+                    try:
+                        site.thank_revision(revision['revid'])
+                    except Exception as ex:
+                        logging.warning("Cannot thank: {}".format(ex))
+
+                    self.upload(page, description)
+                    comment = site.bot_config.message_success
+
+                    if log:
+                        comment += site.bot_config.upload_log_success
+                        page.text += log
+                except TemplateParamsError:
+                    comment = site.bot_config.params_error
+                except (DownloadError, OSError):
+                    comment = site.bot_config.download_error
+                except UploadError:
+                    comment = site.bot_config.upload_error
+                except ImageSizeError:
+                    comment = site.bot_config.width_error
+                except ImageFormatError:
+                    comment = site.bot_config.format(formats=', '.join(self.extensions))
+                except Exception as ex:
+                    comment = 'Unexpected error while file uploading: {}'.format(str(ex))
+                    print(str(ex))
+                    logging.error(str(ex))
+                page.text = self.remove_template(page.text, site)
+                page.save(summary=comment, minor=True)
+
+        print("{} Sleeping 60 seconds".format(datetime.now()))
+        sleep(60)
+        self.run_resizing()
+
+    def remove_template(self, wiki_text, site):
+        for template in self.find_templates(wiki_text, site):
             print("Removing %s" % template)
             wiki_text = wiki_text.replace(template, '')
-        # print(wiki_text)
+
         return wiki_text
 
     def upload(self, page, description):
@@ -185,29 +174,30 @@ class ResizeBot:
             new_image_name = self.get_thumb_filename(page)
             img.save(new_image_name, img.format)
 
-    def get_params(self, page):
+    def get_params(self, page, site):
         try:
             templates = page.templatesWithParams()
-            params = dict(templates).get(self.template)
+
+            params = next(filter(lambda x: x[0].title() == site.bot_config.template_name, templates), [])[1]
             width = int(params[0])
             log = True if 'log' in params else None
             return width, log
         except Exception as ex:
             raise TemplateParamsError(ex)
 
-    def _find_templates(self, wiki_text):
-        return re.findall(self.template_regex, wiki_text)
+    def find_templates(self, wiki_text, site):
+        return re.findall(site.bot_config.template_regex, wiki_text)
 
-    def _is_template_on_page(self, wiki_text):
-        templates = self._find_templates(wiki_text)
+    def is_template_on_page(self, wiki_text, site):
+        templates = self.find_templates(wiki_text, site)
         return bool(templates)
 
-    def get_requester(self, page):
+    def get_requester(self, page, site):
         user = 'unknown'
         last_revision = None
         for revision in page.revisions():
             wiki_text = page.getOldVersion(revision['revid'])
-            if not self._is_template_on_page(wiki_text):
+            if not self.is_template_on_page(wiki_text, site):
                 break
             user = revision.user
             last_revision = revision
@@ -226,10 +216,10 @@ class ResizeBot:
 
 
 if __name__ == '__main__':
-    while True:
-        try:
+    # while True:
+    #     try:
             bot = ResizeBot()
             bot.run_resizing()
-        except Exception as e:
-            print(e)
-            logging.error(e)
+        # except Exception as e:
+        #     print(e)
+        #     logging.error(e)

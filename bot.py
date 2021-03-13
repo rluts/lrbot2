@@ -104,7 +104,7 @@ class ResizeBot:
                 except ImageSizeError:
                     comment = site.bot_config.width_error
                 except ImageFormatError:
-                    comment = site.bot_config.format(formats=', '.join(self.extensions))
+                    comment = site.bot_config.format_error.format(formats=', '.join(self.extensions))
                 except Exception as ex:
                     # comment = 'Unexpected error while file uploading: {}'.format(str(ex))
                     print(str(ex))
